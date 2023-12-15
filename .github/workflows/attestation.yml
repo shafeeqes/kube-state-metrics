@@ -1,0 +1,44 @@
+# Copyright 2023 The OpenVEX Authors
+# SPDX-License-Identifier: Apache-2.0
+
+name: attestation
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  attestation:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: write
+
+
+    steps:
+      - name: Check out code onto GOPATH
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          fetch-depth: 1
+
+      - name: Set tag output
+        id: tag
+        run: echo "tag_name=${GITHUB_REF#refs/*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Install tejolote
+        uses: kubernetes-sigs/release-actions/setup-tejolote@dd08496c83441d6477114cc0555b96d404dacff7 # v0.1.2
+
+      - run: |
+          tejolote attest --artifacts github://kubernetes/kube-state-metrics/${{ steps.tag.outputs.tag_name }} github://kubernetes/kube-state-metrics/"${GITHUB_RUN_ID}" --output kube-state-metrics.intoto.json --sign
+
+      - name: Release
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v0.1.15
+        with:
+          files: kube-state-metrics.intoto.json
+          tag_name: "${{ steps.tag.outputs.tag_name }}"
+          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_REPOSITORY: kubernetes/kube-state-metrics
